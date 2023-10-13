@@ -13,7 +13,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from iron_swords.paths import IMAGES_DIR, JSON_FILE
+from iron_swords.paths import IMAGES_DIR
 
 
 from utils.casualty import Casualty, Gender
@@ -23,9 +23,10 @@ chrome_options = webdriver.ChromeOptions()
 chrome_options.add_argument("--headless")
 
 
-def collect_casualties_urls(main_url: str) -> List[str]:
+def collect_casualties_urls(main_url: str, page_limit: int | None) -> List[str]:
     """Return a list with the URLs of all the casualties pages"""
     urls = []
+    pages = 1
     with webdriver.Chrome(
         service=ChromeService(ChromeDriverManager().install()), options=chrome_options
     ) as driver:
@@ -48,7 +49,11 @@ def collect_casualties_urls(main_url: str) -> List[str]:
                     )
 
                 print(f"{len(urls)} URLs were collected")
-                raise Exception()  # TODO: DELETE
+
+                pages += 1
+
+                if page_limit and page_limit < pages:
+                    break
 
                 # Go to the next page
                 WebDriverWait(driver, 10).until(
@@ -141,24 +146,21 @@ def collect_casualty(url: str) -> Casualty:
     return casualty
 
 
-def collect_casualties_data(main_url: str) -> List[dict]:
-    casualties_data = reload_casualties_data(JSON_FILE)
+def collect_casualties_data(
+    casualties_data: List[dict], page_limit: int | None
+) -> List[dict]:
     exist_urls = [
         Casualty.from_dict(casualty_data).data_url for casualty_data in casualties_data
     ]
     new_urls_counter = 0
 
-    urls = collect_casualties_urls(main_url)
+    urls = collect_casualties_urls("https://www.idf.il/59780", page_limit)
     for i, url in enumerate(urls):
         if url not in exist_urls:
             casualty_data = collect_casualty(url).to_dict()
-            print(
-                f"\nCasualty #{i+1}:\n{json.dumps(casualty_data, indent=4, ensure_ascii=False)}"
-            )
             casualties_data.append(casualty_data)
             new_urls_counter += 1
 
     print(f"\n{new_urls_counter} URLs are new")
 
-    write_casualties_data(casualties_data, JSON_FILE)
     return casualties_data

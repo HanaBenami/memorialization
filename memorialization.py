@@ -19,13 +19,19 @@ def args_parser() -> argparse.ArgumentParser:
         description="Tool for publishing personal posts describing the war casualties",
     )
     parser.add_argument(
-        "-pkg",
-        "--package",
+        "-func",
+        "--scrap_function_package",
         required=True,
         help="""
-            Relative python package path, e.g. "iron_swords", which includes:
-            - scrap.py: collect_casualties_data function
-            - paths.py: JSON_FILE path
+            Relative python package path, e.g. "iron_swords.scrap", that includes collect_casualties_data function
+       """,
+    )
+    parser.add_argument(
+        "-json",
+        "--json_path_package",
+        required=True,
+        help="""
+            Relative python package path, e.g. "iron_swords.paths", that includes JSON_FILE path
         """,
     )
     parser.add_argument("-user", "--instagram_username", required=True)
@@ -37,6 +43,22 @@ def args_parser() -> argparse.ArgumentParser:
         dest="instagram_password",
         required=True,
     )
+    parser.add_argument(
+        "--collect",
+        action="store_true",
+        help="Collect data about the casualties from the web",
+    )
+    parser.add_argument(
+        "--page_limit",
+        type=int,
+        help="Number of pages to delete data from (if not given - all the pages will be scarped)",
+    )
+    parser.add_argument(
+        "--build", action="store_true", help="Create and save the posts"
+    )
+    parser.add_argument(
+        "--publish", action="store_true", help="Publish the pre-saved posts"
+    )
     return parser
 
 
@@ -44,17 +66,24 @@ if __name__ == "__main__":
     args = args_parser().parse_args()
 
     collect_casualties_data = importlib.import_module(
-        f"{args.package}.scrap"
+        args.scrap_function_package
     ).collect_casualties_data
-    JSON_FILE = importlib.import_module(f"{args.package}.paths").JSON_FILE
+    JSON_FILE = importlib.import_module(args.json_path_package).JSON_FILE
 
     instagram_username = args.instagram_username
     instagram_password = args.instagram_password
 
-    collect_casualties_data("https://www.idf.il/59780")
     casualties_data = reload_casualties_data(JSON_FILE)
-    casualties_data = create_casualties_posts(casualties_data)
-    casualties_data = publish_casualties_posts(
-        casualties_data, instagram_username, instagram_password
-    )
+
+    if args.collect:
+        casualties_data = collect_casualties_data(casualties_data, args.page_limit)
+
+    if args.build:
+        casualties_data = create_casualties_posts(casualties_data)
+
+    if args.publish:
+        casualties_data = publish_casualties_posts(
+            casualties_data, instagram_username, instagram_password
+        )
+
     write_casualties_data(casualties_data, JSON_FILE)
