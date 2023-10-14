@@ -46,7 +46,7 @@ class Casualty:
     def date_of_death_en(self):
         """Casualty date of death, in Gregorian format"""
         if self.date_of_death_str:
-            self.date_of_death.strftime("%d/%m/%Y")
+            return self.date_of_death.strftime("%d/%m/%Y")
 
     @property
     def date_of_death_he(self):

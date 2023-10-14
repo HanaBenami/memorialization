@@ -57,7 +57,7 @@ def download_posts(account: str, target_dir: str) -> List[PostContent]:
             try:
                 target_sub_dir = f"{account}_{i}"
                 posts.append(download_post(post, target_sub_dir, loader))
-                time.sleep(2)
+                time.sleep(1)
                 break
             except ConnectionException:
                 loader = init_instagram_loader()
@@ -68,6 +68,7 @@ def download_posts(account: str, target_dir: str) -> List[PostContent]:
 def init_instagram_client(instagram_user: str, intagram_password: str) -> Client:
     """Init an Instagram client object"""
     instagram_client = Client()
+    instagram_client.delay_range = [1, 3]
     instagram_client.login(instagram_user, intagram_password)
     return instagram_client
 
@@ -76,5 +77,10 @@ def publish_post(
     post_cation: str, post_images_paths: List[str], instagram_client: Client
 ) -> Media:
     """Publish an Instagram post"""
-    print(f"\nGoing to publish a post:\n{post_cation}\n{post_images_paths}")
-    return instagram_client.album_upload(post_images_paths, caption=post_cation)
+    f"\nGoing to publish a post:\n{post_cation}\n{post_images_paths}"
+    time.sleep(1)
+    return (
+        instagram_client.album_upload(post_images_paths, caption=post_cation)
+        if 1 < len(post_images_paths)
+        else instagram_client.photo_upload(post_images_paths[0], caption=post_cation)
+    )

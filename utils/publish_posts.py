@@ -1,4 +1,5 @@
 import os
+import datetime
 from typing import List
 from functools import reduce
 from instagrapi import Client
@@ -72,14 +73,16 @@ def _publish_casualties_post(
                 post_images_paths = [
                     casualty.post_path,
                 ]
-                post_images_paths.extend(additional_images_paths)
+                post_images_paths.extend(
+                    [path for path in additional_images_paths if os.path.isfile(path)]
+                )
                 casualty.post_images = additional_images_paths
 
-                publish_post(post_cation, post_images_paths, instagram_client)
+                print(publish_post(post_cation, post_images_paths, instagram_client))
                 print(f"The post was published successfully.")
-                # casualty.post_published = datetime.datetime.now().strftime(
-                #     "%Y-%m-%d %H:%M:%S"
-                # )
+                casualty.post_published = datetime.datetime.now().strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                )
 
             else:
                 print(f"No post to publish for {casualty}")
@@ -127,6 +130,8 @@ def publish_casualties_posts(
 
     instagram_client = init_instagram_client(instagram_user, intagram_password)
 
+    posts, posts_with_additional_images = 0, 0
+
     for i, casualty_data in enumerate(casualties_data):
         casualty = Casualty.from_dict(casualty_data)
         if not casualty.post_published:
@@ -140,16 +145,30 @@ def publish_casualties_posts(
                 ],
                 [],
             )
+
             # Publish the post
             casualty = _publish_casualties_post(
                 casualty,
                 additional_images_paths=additional_images_paths,
                 instagram_client=instagram_client,
             )
+
+            posts += 1
+            if additional_images_paths:
+                posts_with_additional_images += 1
+
             if posts_limit and casualty.post_published:
                 posts_limit -= 1
                 if posts_limit == 0:
                     break
+
         casualties_data[i] = casualty.to_dict()
+
+    print(
+        f"""
+        {posts} were published.
+        {posts_with_additional_images} posts includes additional images.
+    """
+    )
 
     return casualties_data
