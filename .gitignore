@@ -1,5 +1,7 @@
 venv
 **/__pycache__
 **/images
+**/external_posts
+**/generated_posts
 **/posts
 .vscode

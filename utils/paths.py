@@ -1,1 +1,1 @@
-POSTS_DIR = "posts"
+POSTS_DIR = "generated_posts"

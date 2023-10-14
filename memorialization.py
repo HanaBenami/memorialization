@@ -2,7 +2,7 @@ import argparse
 import getpass
 import importlib
 
-from utils.json_storage import reload_casualties_data, write_casualties_data
+from utils.json_storage import reload_data, write_data
 from utils.build_posts import create_casualties_posts
 from utils.publish_posts import publish_casualties_posts
 
@@ -49,15 +49,20 @@ def args_parser() -> argparse.ArgumentParser:
         help="Collect data about the casualties from the web",
     )
     parser.add_argument(
-        "--page_limit",
-        type=int,
-        help="Number of pages to delete data from (if not given - all the pages will be scarped)",
-    )
-    parser.add_argument(
         "--build", action="store_true", help="Create and save the posts"
     )
     parser.add_argument(
         "--publish", action="store_true", help="Publish the pre-saved posts"
+    )
+    parser.add_argument(
+        "--pages_limit",
+        type=int,
+        help="Maximal number of pages to collect data from (if not given - all the pages will be scarped)",
+    )
+    parser.add_argument(
+        "--posts_limit",
+        type=int,
+        help="Maximal number of posts to publish (if not given - all the pages will be published)",
     )
     return parser
 
@@ -73,17 +78,18 @@ if __name__ == "__main__":
     instagram_username = args.instagram_username
     instagram_password = args.instagram_password
 
-    casualties_data = reload_casualties_data(JSON_FILE)
+    casualties_data = reload_data(JSON_FILE)
 
     if args.collect:
-        casualties_data = collect_casualties_data(casualties_data, args.page_limit)
+        casualties_data = collect_casualties_data(casualties_data, args.pages_limit)
+        write_data(casualties_data, JSON_FILE)
 
     if args.build:
         casualties_data = create_casualties_posts(casualties_data)
+        write_data(casualties_data, JSON_FILE)
 
     if args.publish:
         casualties_data = publish_casualties_posts(
-            casualties_data, instagram_username, instagram_password
+            casualties_data, instagram_username, instagram_password, args.posts_limit
         )
-
-    write_casualties_data(casualties_data, JSON_FILE)
+        write_data(casualties_data, JSON_FILE)

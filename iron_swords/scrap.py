@@ -17,7 +17,7 @@ from iron_swords.paths import IMAGES_DIR
 
 
 from utils.casualty import Casualty, Gender
-from utils.json_storage import reload_casualties_data, write_casualties_data
+
 
 chrome_options = webdriver.ChromeOptions()
 chrome_options.add_argument("--headless")
@@ -149,13 +149,17 @@ def collect_casualty(url: str) -> Casualty:
 def collect_casualties_data(
     casualties_data: List[dict], page_limit: int | None
 ) -> List[dict]:
+    """Collect casualties data from the IDF website"""
     exist_urls = [
         Casualty.from_dict(casualty_data).data_url for casualty_data in casualties_data
     ]
     new_urls_counter = 0
 
-    urls = collect_casualties_urls("https://www.idf.il/59780", page_limit)
-    for i, url in enumerate(urls):
+    urls = collect_casualties_urls(
+        "https://www.idf.il/%D7%A0%D7%95%D7%A4%D7%9C%D7%99%D7%9D/%D7%97%D7%9C%D7%9C%D7%99-%D7%97%D7%A8%D7%91%D7%95%D7%AA-%D7%91%D7%A8%D7%96%D7%9C/",
+        page_limit,
+    )
+    for url in urls:
         if url not in exist_urls:
             casualty_data = collect_casualty(url).to_dict()
             casualties_data.append(casualty_data)
