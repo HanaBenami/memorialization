@@ -64,6 +64,11 @@ def args_parser() -> argparse.ArgumentParser:
         type=int,
         help="Maximal number of posts to publish (if not given - all the pages will be published)",
     )
+    parser.add_argument(
+        "--min_images",
+        type=int,
+        help="Minimal number of images in a published post. A post with less images won't be published.",
+    )
     return parser
 
 
@@ -90,6 +95,10 @@ if __name__ == "__main__":
 
     if args.publish:
         casualties_data = publish_casualties_posts(
-            casualties_data, instagram_username, instagram_password, args.posts_limit
+            casualties_data,
+            instagram_username,
+            instagram_password,
+            args.posts_limit,
+            args.min_images,
         )
         write_data(casualties_data, JSON_FILE)

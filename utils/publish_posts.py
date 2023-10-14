@@ -24,18 +24,29 @@ def _prepare_post_text(casualty: Casualty) -> str:
     text = [
         casualty.full_name,
         'ז"ל,',
-        casualty.degree,
-        f"ב{casualty.department}",
-        ", ",
-        f"נפל{gender_suffix}",
-        "בתאריך",
-        f"{casualty.date_of_death_en},",
-        f"מקום מנוחת{gender_suffix or 'ו'}",
-        f"{casualty.grave_city},",
-        f"הותיר{gender_suffix}",
-        f"אחרי{gender_suffix or 'ו'}",
-        "חיים שלמים וזכרונות! 🕯️",
     ]
+    if casualty.date_of_death:
+        text.extend(
+            [
+                f"נפל{gender_suffix}",
+                "בתאריך",
+                f"{casualty.date_of_death_en},",
+            ]
+        )
+    if casualty.grave_city:
+        text.extend(
+            [
+                f"מקום מנוחת{gender_suffix or 'ו'}",
+                f"{casualty.grave_city},",
+            ]
+        )
+    text.extend(
+        [
+            f"הותיר{gender_suffix}",
+            f"אחרי{gender_suffix or 'ו'}",
+            "חלל מלא בזכרונות! 🕯️",
+        ]
+    )
     return " ".join(text)
 
 
@@ -47,12 +58,13 @@ def _prepare_post_hashtags(casualty: Casualty) -> str:
         "חרבותברזל",
         "יוםהזיכרון",
         "יוםהזכרוןהתשפד",
-        "יוםהזיכרון2024",
+        "יוםהזיכרון2023",
         "חללזכרונות",
         "lezichram",
         "YomHazikaron",
         "lsraelRemembers",
         "memorialday",
+        "standwithisrael",
     ]
     return " ".join([f"#{hashtag}" for hashtag in hashtags])
 
@@ -70,16 +82,17 @@ def _publish_casualties_post(
                 post_cation = f"{post_text}\n{post_hashtags}"
                 casualty.post_caption = post_cation
 
+                casualty.post_images = [
+                    path for path in additional_images_paths if os.path.isfile(path)
+                ]
+
                 post_images_paths = [
                     casualty.post_path,
                 ]
-                post_images_paths.extend(
-                    [path for path in additional_images_paths if os.path.isfile(path)]
-                )
-                casualty.post_images = additional_images_paths
+                post_images_paths.extend(casualty.post_images)
 
-                print(publish_post(post_cation, post_images_paths, instagram_client))
-                print(f"The post was published successfully.")
+                publish_post(post_cation, post_images_paths, instagram_client)
+                print(f"The post about {casualty} was published successfully.")
                 casualty.post_published = datetime.datetime.now().strftime(
                     "%Y-%m-%d %H:%M:%S"
                 )
@@ -119,20 +132,20 @@ def _download_external_posts() -> List[PostContent]:
 
 
 def publish_casualties_posts(
-    casualties_data: List[dict],
+    given_casualties_data: List[dict],
     instagram_user: str,
     intagram_password: str,
     posts_limit: int,
+    min_images: int,
 ) -> List[dict]:
     """Publish posts about all the casualties, one per each"""
 
     external_posts = _download_external_posts()
-
+    updated_casualties_data = []
     instagram_client = init_instagram_client(instagram_user, intagram_password)
-
     posts, posts_with_additional_images = 0, 0
 
-    for i, casualty_data in enumerate(casualties_data):
+    for casualty_data in given_casualties_data:
         casualty = Casualty.from_dict(casualty_data)
         if not casualty.post_published:
             # Look for additional images
@@ -145,30 +158,30 @@ def publish_casualties_posts(
                 ],
                 [],
             )
-
             # Publish the post
-            casualty = _publish_casualties_post(
-                casualty,
-                additional_images_paths=additional_images_paths,
-                instagram_client=instagram_client,
-            )
+            if min_images and 1 + len(additional_images_paths) < min_images:
+                print(
+                    f"Not enough images - the post about {casualty} won't be published."
+                )
+            else:
+                casualty = _publish_casualties_post(
+                    casualty,
+                    additional_images_paths=additional_images_paths,
+                    instagram_client=instagram_client,
+                )
+                posts += 1
+                if additional_images_paths:
+                    posts_with_additional_images += 1
 
-            posts += 1
-            if additional_images_paths:
-                posts_with_additional_images += 1
-
-            if posts_limit and casualty.post_published:
-                posts_limit -= 1
-                if posts_limit == 0:
-                    break
-
-        casualties_data[i] = casualty.to_dict()
+        updated_casualties_data.append(casualty.to_dict())
+        if posts_limit == posts:
+            break
 
     print(
         f"""
-        {posts} were published.
+        {posts} posts were published.
         {posts_with_additional_images} posts includes additional images.
     """
     )
 
-    return casualties_data
+    return updated_casualties_data

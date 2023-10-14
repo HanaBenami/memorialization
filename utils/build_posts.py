@@ -95,8 +95,10 @@ def _add_details(
     """Add additional text about the casualty to the post"""
     text = [
         f"נפל{'ה' if casualty.gender == Gender.FEMALE else ''} במלחמת חרבות ברזל",
-        f"בתאריך {casualty.date_of_death_he} {casualty.date_of_death_en}",
     ]
+
+    if casualty.date_of_death:
+        text.append(f"בתאריך {casualty.date_of_death_he} {casualty.date_of_death_en}")
 
     if casualty.age:
         text.append(
