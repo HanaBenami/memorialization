@@ -3,17 +3,11 @@ import datetime
 from collections import defaultdict
 from typing import List
 from functools import reduce
-from instagrapi import Client
 
 from utils.casualty import Casualty, Gender
-from utils.json_storage import reload_data, write_data
+from utils.instagram import InstagramClient
 from utils.paths import *
-from utils.instagram import (
-    init_instagram_client,
-    publish_post,
-    download_posts,
-    PostContent,
-)
+from utils.instagram import InstagramClient
 
 
 STOP_PUBLISHING = False
@@ -53,10 +47,14 @@ def _prepare_post_text(casualty: Casualty) -> str:
 
 def _prepare_post_hashtags(casualty: Casualty) -> str:
     """Prepare to text description for the given casualty post"""
+    spaces = "\n".join([".", "", ".", "", ".", "", ".", "", ""])
+
     hashtags = [
         casualty.full_name.replace(" ", ""),
         "לזכרם",
         "חרבותברזל",
+        "נופליחרבותברזל",
+        "haravotbarzel",
         "יוםהזיכרון",
         "יוםהזכרוןהתשפד",
         "יוםהזיכרון2023",
@@ -67,10 +65,14 @@ def _prepare_post_hashtags(casualty: Casualty) -> str:
         "memorialday",
         "standwithisrael",
     ]
-    return " ".join([f"#{hashtag}" for hashtag in hashtags])
+    hashtags = " ".join([f"#{hashtag}" for hashtag in hashtags])
+
+    return f"{spaces}\n{hashtags}"
 
 
-def _publish_casualties_post(casualty: Casualty, instagram_client: Client) -> Casualty:
+def _publish_casualty_post(
+    casualty: Casualty, instagram_client: InstagramClient
+) -> Casualty:
     """Publish a post about the casualty"""
     global STOP_PUBLISHING
     try:
@@ -84,11 +86,9 @@ def _publish_casualties_post(casualty: Casualty, instagram_client: Client) -> Ca
                 post_images_paths = [
                     casualty.post_path,
                 ]
-                post_images_paths.extend(
-                    path for path in casualty.post_images[1:] if os.path.isfile(path)
-                )
+                post_images_paths.extend(casualty.post_images[1:])
 
-                publish_post(post_cation, post_images_paths, instagram_client)
+                instagram_client.publish_post(post_cation, post_images_paths)
                 print(f"The post about {casualty} was published successfully.")
                 casualty.post_published = datetime.datetime.now().strftime(
                     "%Y-%m-%d %H:%M:%S"
@@ -98,7 +98,7 @@ def _publish_casualties_post(casualty: Casualty, instagram_client: Client) -> Ca
                 print(f"No post to publish for {casualty}")
 
     except Exception as e:
-        print(f"\nCouldn't publish the post for {casualty}:\n{e}\n\nGoing to stop...")
+        print(f"Couldn't publish the post for {casualty}:\n{e}\n\nGoing to stop...")
         STOP_PUBLISHING = True
 
     return casualty
@@ -114,30 +114,32 @@ def publish_casualties_posts(
     """Publish posts about all the casualties, one per each"""
 
     updated_casualties_data = []
-    instagram_client = init_instagram_client(instagram_user, intagram_password)
+    instagram_client = InstagramClient(instagram_user, intagram_password)
     posts = 0
     images_per_posts = defaultdict(lambda: 0)
 
     for casualty_data in given_casualties_data:
         casualty: Casualty = Casualty.from_dict(casualty_data)
-        if not casualty.post_published:
+        if not casualty.post_published and (posts_limit is None or posts < posts_limit):
+            casualty.post_images = [
+                path for path in casualty.post_images if os.path.isfile(path)
+            ]
             if min_images and len(casualty.post_images) < min_images:
                 print(
-                    f"Not enough images - the post about {casualty} won't be published."
+                    f"\nNot enough images - the post about {casualty} won't be published."
                 )
             else:
-                casualty = _publish_casualties_post(
+                casualty = _publish_casualty_post(
                     casualty,
                     instagram_client=instagram_client,
                 )
-                posts += 1
-                images_per_posts[len(casualty.post_images)] += 1
+                if casualty.post_published:
+                    posts += 1
+                    images_per_posts[len(casualty.post_images)] += 1
 
         updated_casualties_data.append(casualty.to_dict())
-        if posts_limit == posts:
-            break
 
-    print(f"{posts} posts were published. Number of images in exah posts:")
+    print(f"\n{posts} posts were published. Number of images in each posts:")
     print(
         "\n".join(
             f"{images}: {posts} posts" for images, posts in images_per_posts.items()

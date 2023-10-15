@@ -1,7 +1,7 @@
 from functools import reduce
 import os
 from typing import List
-from utils.instagram import PostContent, download_posts
+from utils.instagram import InstagramScraper, PostContent
 from utils.json_storage import reload_data, write_data
 
 
@@ -19,7 +19,9 @@ def _download_external_posts(instagram_accounts: List[str]) -> List[PostContent]
             ]
             external_posts.extend(account_external_posts)
         else:
-            account_external_posts = download_posts(account, target_dir)
+            account_external_posts = InstagramScraper().download_posts(
+                account, target_dir
+            )
             account_external_posts_data = [
                 post.to_dict() for post in account_external_posts
             ]
