@@ -1,9 +1,6 @@
-import enum
 import os
-import json
 from pathlib import Path
 import re
-import time
 from datetime import datetime
 from typing import List
 
@@ -17,6 +14,7 @@ from iron_swords.paths import IMAGES_DIR
 
 
 from utils.casualty import Casualty, Gender
+from utils.collect_external_posts import find_images_in_external_posts
 
 
 chrome_options = webdriver.ChromeOptions()
@@ -95,20 +93,25 @@ def collect_casualty(url: str) -> Casualty:
             degree_cont, full_name = full_name.split(" ", 1)
             degree = degree + " " + degree_cont
 
+        post_images = []
         img_url = (
             driver.find_element(By.CLASS_NAME, "soldier-image")
             .find_element(By.CLASS_NAME, "img-fluid")
             .get_attribute("src")
         )
-        if "candle" in img_url:
-            img_path = None
-        else:
-            img_path = f"{IMAGES_DIR}/{full_name}.jpg"
+        if img_url and not "candle" in img_url:
+            img_path = os.path.join(os.getcwd(), IMAGES_DIR, f"{full_name}.jpg")
             Path(IMAGES_DIR).mkdir(parents=True, exist_ok=True)
             img = driver.find_element(By.CLASS_NAME, "soldier-image").find_element(
                 By.CLASS_NAME, "img-fluid"
             )
             img.screenshot(img_path)
+            post_images.append(img_path)
+        post_images.extend(
+            find_images_in_external_posts(
+                full_name=full_name, instagram_accounts=["remember_haravot_barzel"]
+            )
+        )
 
         date_of_death_str = re_search("(?:נפל.? ביום .*?)(\d+\.\d+\.\d+)", section)
         date_of_death_str = (
@@ -129,18 +132,16 @@ def collect_casualty(url: str) -> Casualty:
         )
 
         casualty = Casualty(
-            degree=degree,
+            data_url=url,
             full_name=full_name,
+            degree=degree,
             department=section.split("\n")[1],
             living_city=re_search("(?:, מ)(.*?)(?:,)", section),
             grave_city=re_search("(בית העלמין.*?)(?:\\.)", section),
             age=age,
             gender=gender,
             date_of_death_str=date_of_death_str,
-            img_path=img_path,
-            post_path=None,
-            published=False,
-            data_url=url,
+            post_images=post_images,
         )
 
     return casualty

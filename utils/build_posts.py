@@ -29,7 +29,9 @@ def _get_background(casualty: Casualty):
 def _get_image(casualty: Casualty) -> Image:
     """Return the casualty's image, opened and resized"""
     casualty_img = Image.open(
-        casualty.img_path if casualty.img_path else "resources/no_image_default.jpeg"
+        casualty.post_images[0]
+        if casualty.post_images
+        else "resources/no_image_default.jpeg"
     )
     width, height = casualty_img.size
     ratio = height / width

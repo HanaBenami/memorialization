@@ -1,5 +1,6 @@
 import os
 import datetime
+from collections import defaultdict
 from typing import List
 from functools import reduce
 from instagrapi import Client
@@ -69,9 +70,7 @@ def _prepare_post_hashtags(casualty: Casualty) -> str:
     return " ".join([f"#{hashtag}" for hashtag in hashtags])
 
 
-def _publish_casualties_post(
-    casualty: Casualty, additional_images_paths: List[str], instagram_client: Client
-) -> Casualty:
+def _publish_casualties_post(casualty: Casualty, instagram_client: Client) -> Casualty:
     """Publish a post about the casualty"""
     global STOP_PUBLISHING
     try:
@@ -82,14 +81,12 @@ def _publish_casualties_post(
                 post_cation = f"{post_text}\n{post_hashtags}"
                 casualty.post_caption = post_cation
 
-                casualty.post_images = [
-                    path for path in additional_images_paths if os.path.isfile(path)
-                ]
-
                 post_images_paths = [
                     casualty.post_path,
                 ]
-                post_images_paths.extend(casualty.post_images)
+                post_images_paths.extend(
+                    path for path in casualty.post_images[1:] if os.path.isfile(path)
+                )
 
                 publish_post(post_cation, post_images_paths, instagram_client)
                 print(f"The post about {casualty} was published successfully.")
@@ -107,30 +104,6 @@ def _publish_casualties_post(
     return casualty
 
 
-def _download_external_posts() -> List[PostContent]:
-    """Download posts from other Instagram accounts, in order to look for additional related images"""
-    external_accounts = ["remember_haravot_barzel"]
-    external_posts = []
-    for account in external_accounts:
-        target_dir = f"external_posts/{account}"
-        json_path = f"{target_dir}/{account}.json"
-        if os.path.isfile(json_path):
-            account_external_posts_data = reload_data(json_path)
-            account_external_posts = [
-                PostContent.from_dict(post_data)
-                for post_data in account_external_posts_data
-            ]
-            external_posts.extend(account_external_posts)
-        else:
-            account_external_posts = download_posts(account, target_dir)
-            account_external_posts_data = [
-                post.to_dict() for post in account_external_posts
-            ]
-            write_data(account_external_posts_data, json_path)
-            external_posts.extend(account_external_posts)
-    return external_posts
-
-
 def publish_casualties_posts(
     given_casualties_data: List[dict],
     instagram_user: str,
@@ -140,48 +113,35 @@ def publish_casualties_posts(
 ) -> List[dict]:
     """Publish posts about all the casualties, one per each"""
 
-    external_posts = _download_external_posts()
     updated_casualties_data = []
     instagram_client = init_instagram_client(instagram_user, intagram_password)
-    posts, posts_with_additional_images = 0, 0
+    posts = 0
+    images_per_posts = defaultdict(lambda: 0)
 
     for casualty_data in given_casualties_data:
-        casualty = Casualty.from_dict(casualty_data)
+        casualty: Casualty = Casualty.from_dict(casualty_data)
         if not casualty.post_published:
-            # Look for additional images
-            additional_images_paths = reduce(
-                lambda a, b: a + b,
-                [
-                    post.images_paths
-                    for post in external_posts
-                    if casualty.full_name in post.text
-                ],
-                [],
-            )
-            # Publish the post
-            if min_images and 1 + len(additional_images_paths) < min_images:
+            if min_images and len(casualty.post_images) < min_images:
                 print(
                     f"Not enough images - the post about {casualty} won't be published."
                 )
             else:
                 casualty = _publish_casualties_post(
                     casualty,
-                    additional_images_paths=additional_images_paths,
                     instagram_client=instagram_client,
                 )
                 posts += 1
-                if additional_images_paths:
-                    posts_with_additional_images += 1
+                images_per_posts[len(casualty.post_images)] += 1
 
         updated_casualties_data.append(casualty.to_dict())
         if posts_limit == posts:
             break
 
+    print(f"{posts} posts were published. Number of images in exah posts:")
     print(
-        f"""
-        {posts} posts were published.
-        {posts_with_additional_images} posts includes additional images.
-    """
+        "\n".join(
+            f"{images}: {posts} posts" for images, posts in images_per_posts.items()
+        )
     )
 
     return updated_casualties_data

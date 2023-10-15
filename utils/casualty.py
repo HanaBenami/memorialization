@@ -18,19 +18,18 @@ class Gender(str, enum.Enum):
 class Casualty:
     """Casualty data"""
 
-    degree: str
+    data_url: str
     full_name: str
+    degree: str
     department: str | None
     living_city: str | None
     grave_city: str | None
     age: int | None
     gender: Gender | None
     date_of_death_str: str | None  # Required format: %Y-%m-%d
-    img_path: str | None
-    data_url: str
+    post_images: List[str]
     post_path: str | None = None
     post_caption: str | None = None
-    post_images: List[str] | None = None
     post_published: bool | str = False
 
     def __str__(self) -> str:
