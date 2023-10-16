@@ -107,11 +107,6 @@ def collect_casualty(url: str) -> Casualty:
             )
             img.screenshot(img_path)
             post_images.append(img_path)
-        post_images.extend(
-            find_images_in_external_posts(
-                full_name=full_name, instagram_accounts=["remember_haravot_barzel"]
-            )
-        )
 
         date_of_death_str = re_search("(?:נפל.? ביום .*?)(\d+\.\d+\.\d+)", section)
         date_of_death_str = (
@@ -147,25 +142,44 @@ def collect_casualty(url: str) -> Casualty:
     return casualty
 
 
+def add_casualty_images_from_external_posts(casualty: Casualty) -> None:
+    """Look for the casualty name in other posts. If exists, add images from these posts."""
+    casualty.post_images.extend(
+        find_images_in_external_posts(
+            full_name=casualty.full_name, instagram_accounts=["remember_haravot_barzel"]
+        )
+    )
+    casualty.post_images = list(set(casualty.post_images))
+    casualty.post_images = [
+        path for path in casualty.post_images if os.path.isfile(path)
+    ]
+    casualty.post_images.sort(key=lambda path: IMAGES_DIR not in path)
+
+
 def collect_casualties_data(
     casualties_data: List[dict], page_limit: int | None
 ) -> List[dict]:
     """Collect casualties data from the IDF website"""
-    exist_urls = [
-        Casualty.from_dict(casualty_data).data_url for casualty_data in casualties_data
+    casualties: List[Casualty] = [
+        Casualty.from_dict(casualty_data) for casualty_data in casualties_data
     ]
+    exist_urls = [casualty.data_url for casualty in casualties]
     new_urls_counter = 0
 
     urls = collect_casualties_urls(
         "https://www.idf.il/%D7%A0%D7%95%D7%A4%D7%9C%D7%99%D7%9D/%D7%97%D7%9C%D7%9C%D7%99-%D7%97%D7%A8%D7%91%D7%95%D7%AA-%D7%91%D7%A8%D7%96%D7%9C/",
         page_limit,
     )
+
     for url in urls:
         if url not in exist_urls:
-            casualty_data = collect_casualty(url).to_dict()
-            casualties_data.append(casualty_data)
+            casualties.append(collect_casualty(url))
             new_urls_counter += 1
+
+    for casualty in casualties:
+        if not casualty.post_published:
+            add_casualty_images_from_external_posts(casualty)
 
     print(f"\n{new_urls_counter} URLs are new")
 
-    return casualties_data
+    return [casualty.to_dict() for casualty in casualties]

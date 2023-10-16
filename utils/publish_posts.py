@@ -86,7 +86,12 @@ def _publish_casualty_post(
                 post_images_paths = [
                     casualty.post_path,
                 ]
-                post_images_paths.extend(casualty.post_images[1:])
+                post_images_paths.extend(
+                    casualty.post_images[1:]
+                    # TODO?
+                    # if 1 < len(casualty.post_images)
+                    # else casualty.post_images
+                )
 
                 instagram_client.publish_post(post_cation, post_images_paths)
                 print(f"The post about {casualty} was published successfully.")
