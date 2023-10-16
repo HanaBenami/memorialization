@@ -14,6 +14,7 @@ from iron_swords.paths import IMAGES_DIR
 
 
 from utils.casualty import Casualty, Gender
+from utils.collect_external_images import find_images_in_external_images_pool
 from utils.collect_external_posts import find_images_in_external_posts
 
 
@@ -145,12 +146,15 @@ def collect_casualty(url: str) -> Casualty:
     return casualty
 
 
-def add_casualty_images_from_external_posts(casualty: Casualty) -> None:
+def add_casualty_images_from_external_resources(casualty: Casualty) -> None:
     """Look for the casualty name in other posts. If exists, add images from these posts."""
     casualty.post_images.extend(
         find_images_in_external_posts(
             full_name=casualty.full_name, instagram_accounts=["remember_haravot_barzel"]
         )
+    )
+    casualty.post_images.extend(
+        find_images_in_external_images_pool(full_name=casualty.full_name)
     )
     casualty.post_images = list(set(casualty.post_images))
     casualty.post_images = [
@@ -166,6 +170,9 @@ def collect_casualties_data(
     casualties: List[Casualty] = [
         Casualty.from_dict(casualty_data) for casualty_data in casualties_data
     ]
+    if recollect:
+        casualties = [casualty for casualty in casualties if casualty.post_published]
+
     exist_urls = {casualty.data_url: casualty for casualty in casualties}
     new_urls_counter = 0
 
@@ -175,15 +182,13 @@ def collect_casualties_data(
     )
 
     for url in urls:
-        if (url not in exist_urls) or (
-            recollect and not exist_urls[url].post_published
-        ):
+        if url not in exist_urls:
             casualties.append(collect_casualty(url))
             new_urls_counter += 1
 
     for casualty in casualties:
         if not casualty.post_published:
-            add_casualty_images_from_external_posts(casualty)
+            add_casualty_images_from_external_resources(casualty)
 
     print(f"\n{new_urls_counter} URLs are new")
 

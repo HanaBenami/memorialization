@@ -127,7 +127,7 @@ def _add_details(
 
 def _get_post_path(casualty: Casualty) -> str:
     """Get the post targer path"""
-    post_dir = os.path.join(os.getcwd(), POSTS_DIR)
+    post_dir = os.path.join(os.getcwd(), GENERATED_POSTS_DIR)
     post_dir = (
         os.path.join(
             post_dir,

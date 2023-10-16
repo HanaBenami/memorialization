@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from singleton_decorator import singleton
 
+from utils.paths import is_image_file
+
 
 @dataclass_json
 @dataclass
@@ -40,12 +42,7 @@ class InstagramScraper:
             if file_name.endswith(".txt"):
                 with open(file_path) as fp:
                     text = fp.read()
-            elif any(
-                [
-                    file_name.endswith(f".{suffix}")
-                    for suffix in ["jpg", "jpeg", "png", "bmp"]
-                ]
-            ):
+            elif is_image_file(file_path):
                 images_paths.append(file_path)
         return PostContent(text=text, images_paths=images_paths)
 
