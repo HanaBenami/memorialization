@@ -49,6 +49,11 @@ def args_parser() -> argparse.ArgumentParser:
         help="Collect data about the casualties from the web",
     )
     parser.add_argument(
+        "--recollect",
+        action="store_true",
+        help="Collect data about the casualties from the web, even if it was already collected, unless if it was already published",
+    )
+    parser.add_argument(
         "--build", action="store_true", help="Create and save the posts"
     )
     parser.add_argument(
@@ -86,7 +91,9 @@ if __name__ == "__main__":
     casualties_data = reload_data(JSON_FILE)
 
     if args.collect:
-        casualties_data = collect_casualties_data(casualties_data, args.pages_limit)
+        casualties_data = collect_casualties_data(
+            casualties_data, args.pages_limit, args.recollect
+        )
         write_data(casualties_data, JSON_FILE)
 
     if args.build:

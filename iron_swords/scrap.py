@@ -40,11 +40,10 @@ def collect_casualties_urls(main_url: str, page_limit: int | None) -> List[str]:
                 # Collect data
                 casualty_items = driver.find_elements(By.CLASS_NAME, "casualty-item")
                 for casualty_item in casualty_items:
-                    urls.append(
-                        casualty_item.find_element(
-                            By.CLASS_NAME, "btn-link-text"
-                        ).get_attribute("href")
-                    )
+                    url = casualty_item.find_element(
+                        By.CLASS_NAME, "btn-link-text"
+                    ).get_attribute("href")
+                    urls.append(url)
 
                 print(f"{len(urls)} URLs were collected")
 
@@ -54,9 +53,10 @@ def collect_casualties_urls(main_url: str, page_limit: int | None) -> List[str]:
                     break
 
                 # Go to the next page
-                WebDriverWait(driver, 10).until(
+                next_page_btn = WebDriverWait(driver, 10).until(
                     EC.element_to_be_clickable((By.CLASS_NAME, "page-item-next"))
-                ).click()
+                )
+                next_page_btn.click()
 
             # Expection will be raised when no pages left
             except Exception:
@@ -93,21 +93,6 @@ def collect_casualty(url: str) -> Casualty:
             degree_cont, full_name = full_name.split(" ", 1)
             degree = degree + " " + degree_cont
 
-        post_images = []
-        img_url = (
-            driver.find_element(By.CLASS_NAME, "soldier-image")
-            .find_element(By.CLASS_NAME, "img-fluid")
-            .get_attribute("src")
-        )
-        if img_url and not "candle" in img_url:
-            img_path = os.path.join(os.getcwd(), IMAGES_DIR, f"{full_name}.jpg")
-            Path(IMAGES_DIR).mkdir(parents=True, exist_ok=True)
-            img = driver.find_element(By.CLASS_NAME, "soldier-image").find_element(
-                By.CLASS_NAME, "img-fluid"
-            )
-            img.screenshot(img_path)
-            post_images.append(img_path)
-
         date_of_death_str = re_search("(?:נפל.? ביום .*?)(\d+\.\d+\.\d+)", section)
         date_of_death_str = (
             datetime.strptime(date_of_death_str, "%d.%m.%Y").strftime("%Y-%m-%d")
@@ -125,6 +110,24 @@ def collect_casualty(url: str) -> Casualty:
             if "בת" in section
             else None
         )
+
+        post_images = []
+        img_url = (
+            driver.find_element(By.CLASS_NAME, "soldier-image")
+            .find_element(By.CLASS_NAME, "img-fluid")
+            .get_attribute("src")
+        )
+        if img_url and not "candle" in img_url:
+            img_url = img_url[: img_url.rindex("?")]
+            driver.get(img_url)
+            WebDriverWait(driver, 60).until(
+                EC.presence_of_element_located((By.TAG_NAME, "img"))
+            )
+            img = driver.find_element(By.TAG_NAME, "img")
+            img_path = os.path.join(os.getcwd(), IMAGES_DIR, f"{full_name}.jpg")
+            Path(IMAGES_DIR).mkdir(parents=True, exist_ok=True)
+            img.screenshot(img_path)
+            post_images.append(img_path)
 
         casualty = Casualty(
             data_url=url,
@@ -157,13 +160,13 @@ def add_casualty_images_from_external_posts(casualty: Casualty) -> None:
 
 
 def collect_casualties_data(
-    casualties_data: List[dict], page_limit: int | None
+    casualties_data: List[dict], page_limit: int | None = None, recollect: bool = False
 ) -> List[dict]:
     """Collect casualties data from the IDF website"""
     casualties: List[Casualty] = [
         Casualty.from_dict(casualty_data) for casualty_data in casualties_data
     ]
-    exist_urls = [casualty.data_url for casualty in casualties]
+    exist_urls = {casualty.data_url: casualty for casualty in casualties}
     new_urls_counter = 0
 
     urls = collect_casualties_urls(
@@ -172,7 +175,9 @@ def collect_casualties_data(
     )
 
     for url in urls:
-        if url not in exist_urls:
+        if (url not in exist_urls) or (
+            recollect and not exist_urls[url].post_published
+        ):
             casualties.append(collect_casualty(url))
             new_urls_counter += 1
 
