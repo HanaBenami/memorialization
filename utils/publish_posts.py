@@ -71,7 +71,7 @@ def _prepare_post_hashtags(casualty: Casualty) -> str:
 
 
 def _publish_casualty_post(
-    casualty: Casualty, instagram_client: InstagramClient
+    casualty: Casualty, instagram_client: InstagramClient, save_publish_date: bool
 ) -> Casualty:
     """Publish a post about the casualty"""
     global STOP_PUBLISHING
@@ -86,17 +86,14 @@ def _publish_casualty_post(
                 post_images_paths = [
                     casualty.post_path,
                 ]
-                post_images_paths.extend(
-                    casualty.post_images[1:]
-                    # TODO?
-                    # if 1 < len(casualty.post_images)
-                    # else casualty.post_images
-                )
+                post_images_paths.extend(casualty.post_images[1:])
 
                 instagram_client.publish_post(post_cation, post_images_paths)
                 print(f"The post about {casualty} was published successfully.")
-                casualty.post_published = datetime.datetime.now().strftime(
-                    "%Y-%m-%d %H:%M:%S"
+                casualty.post_published = (
+                    datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    if save_publish_date
+                    else True
                 )
 
             else:
@@ -115,6 +112,7 @@ def publish_casualties_posts(
     intagram_password: str,
     posts_limit: int,
     min_images: int,
+    save_publish_date: bool,
 ) -> List[dict]:
     """Publish posts about all the casualties, one per each"""
 
@@ -137,6 +135,7 @@ def publish_casualties_posts(
                 casualty = _publish_casualty_post(
                     casualty,
                     instagram_client=instagram_client,
+                    save_publish_date=save_publish_date,
                 )
                 if casualty.post_published:
                     posts += 1

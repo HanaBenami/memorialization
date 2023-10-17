@@ -60,6 +60,11 @@ def args_parser() -> argparse.ArgumentParser:
         "--publish", action="store_true", help="Publish the pre-saved posts"
     )
     parser.add_argument(
+        "--dont_save_publish_date",
+        action="store_true",
+        help='Publish date won\'t be saved ("True" will be saved instead)',
+    )
+    parser.add_argument(
         "--pages_limit",
         type=int,
         help="Maximal number of pages to collect data from (if not given - all the pages will be scarped)",
@@ -92,7 +97,11 @@ if __name__ == "__main__":
 
     if args.collect:
         casualties_data = collect_casualties_data(
-            casualties_data, args.pages_limit, args.recollect
+            casualties_data,
+            instagram_username,
+            instagram_password,
+            args.pages_limit,
+            args.recollect,
         )
         write_data(casualties_data, JSON_FILE)
 
@@ -107,5 +116,6 @@ if __name__ == "__main__":
             instagram_password,
             args.posts_limit,
             args.min_images,
+            not args.dont_save_publish_date,
         )
         write_data(casualties_data, JSON_FILE)

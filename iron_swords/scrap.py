@@ -113,22 +113,32 @@ def collect_casualty(url: str) -> Casualty:
         )
 
         post_images = []
+        small_img = driver.find_element(By.CLASS_NAME, "soldier-image").find_element(
+            By.CLASS_NAME, "img-fluid"
+        )
         img_url = (
             driver.find_element(By.CLASS_NAME, "soldier-image")
             .find_element(By.CLASS_NAME, "img-fluid")
             .get_attribute("src")
         )
         if img_url and not "candle" in img_url:
+            Path(IMAGES_DIR).mkdir(parents=True, exist_ok=True)
+            small_img_path = os.path.join(
+                os.getcwd(), IMAGES_DIR, f"{full_name}_small.png"
+            )
+            big_img_path = os.path.join(os.getcwd(), IMAGES_DIR, f"{full_name}_big.png")
+
+            small_img.screenshot(small_img_path)
+            post_images.append(small_img_path)
+
             img_url = img_url[: img_url.rindex("?")]
             driver.get(img_url)
             WebDriverWait(driver, 60).until(
                 EC.presence_of_element_located((By.TAG_NAME, "img"))
             )
-            img = driver.find_element(By.TAG_NAME, "img")
-            img_path = os.path.join(os.getcwd(), IMAGES_DIR, f"{full_name}.jpg")
-            Path(IMAGES_DIR).mkdir(parents=True, exist_ok=True)
-            img.screenshot(img_path)
-            post_images.append(img_path)
+            big_img = driver.find_element(By.TAG_NAME, "img")
+            big_img.screenshot(big_img_path)
+            post_images.append(big_img_path)
 
         casualty = Casualty(
             data_url=url,
@@ -146,11 +156,17 @@ def collect_casualty(url: str) -> Casualty:
     return casualty
 
 
-def add_casualty_images_from_external_resources(casualty: Casualty) -> None:
+def add_casualty_images_from_external_resources(
+    casualty: Casualty, instagram_user: str, intagram_password: str, redownload: bool
+) -> None:
     """Look for the casualty name in other posts. If exists, add images from these posts."""
     casualty.post_images.extend(
         find_images_in_external_posts(
-            full_name=casualty.full_name, instagram_accounts=["remember_haravot_barzel"]
+            full_name=casualty.full_name,
+            instagram_accounts=["remember_haravot_barzel"],
+            instagram_user=instagram_user,
+            intagram_password=intagram_password,
+            redownload=redownload,
         )
     )
     casualty.post_images.extend(
@@ -164,7 +180,11 @@ def add_casualty_images_from_external_resources(casualty: Casualty) -> None:
 
 
 def collect_casualties_data(
-    casualties_data: List[dict], page_limit: int | None = None, recollect: bool = False
+    casualties_data: List[dict],
+    instagram_user: str,
+    intagram_password: str,
+    page_limit: int | None = None,
+    recollect: bool = False,
 ) -> List[dict]:
     """Collect casualties data from the IDF website"""
     casualties: List[Casualty] = [
@@ -186,10 +206,19 @@ def collect_casualties_data(
             casualties.append(collect_casualty(url))
             new_urls_counter += 1
 
+    print(f"\nData was collected from {new_urls_counter} URLs")
+
+    print("\nLooking for additional images in external resources...")
+    redownload = True
     for casualty in casualties:
         if not casualty.post_published:
-            add_casualty_images_from_external_resources(casualty)
+            add_casualty_images_from_external_resources(
+                casualty,
+                instagram_user,
+                intagram_password,
+                redownload=redownload,
+            )
+            redownload = False
 
-    print(f"\n{new_urls_counter} URLs are new")
-
+    print("\nDone!")
     return [casualty.to_dict() for casualty in casualties]
