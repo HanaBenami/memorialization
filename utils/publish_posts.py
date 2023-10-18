@@ -4,9 +4,10 @@ from collections import defaultdict
 from typing import List, Tuple
 from functools import reduce
 import signal
-from instagrapi.utils import string
+import instagrapi.types
 
 from utils.casualty import Casualty, Gender
+from utils.images import remove_duplicates_images
 from utils.instagram import InstagramClient
 from utils.paths import *
 from utils.instagram import InstagramClient
@@ -79,12 +80,25 @@ def _prepare_post_hashtags(casualty: Casualty) -> str:
     return f"{spaces}\n{hashtags}"
 
 
+def _prepare_post_images(casualty: Casualty) -> List[str]:
+    """Prepare list of images to publish, without duplications"""
+    post_images_paths, removed = remove_duplicates_images(
+        casualty.post_additional_images
+    )
+    if removed:
+        print(f"{len(removed)} duplicates images were removed")
+    return post_images_paths
+
+
 def _publish_casualty_post(
-    casualty: Casualty, instagram_client: InstagramClient, test: bool
-) -> Tuple[Casualty, bool]:
+    casualty: Casualty,
+    instagram_client: InstagramClient,
+    test: bool = False,
+    dry_run: bool = False,
+) -> Tuple[Casualty, instagrapi.types.Media | bool | None, int]:
     """Publish a post about the casualty"""
     global STOP_PUBLISHING
-    published = None
+    published, post_images_paths = None, []
     try:
         if not STOP_PUBLISHING:
             if casualty.post_path:
@@ -92,11 +106,15 @@ def _publish_casualty_post(
                 post_hashtags = _prepare_post_hashtags(casualty)
                 post_cation = f"{post_text}\n{post_hashtags}"
                 casualty.post_caption = post_cation
+                post_images_paths = _prepare_post_images(casualty)
                 published = instagram_client.publish_post(
-                    post_cation, casualty.post_path, casualty.post_additional_images
+                    post_cation,
+                    casualty.post_path,
+                    post_images_paths,
+                    dry_run,
                 )
-                if published:
-                    print(f"The post about {casualty} was published successfully.")
+                if published and not dry_run:
+                    print(f"The post about {casualty} was published' successfully.")
                     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     if test:
                         casualty.post_tested = timestamp
@@ -112,7 +130,7 @@ def _publish_casualty_post(
         )
         STOP_PUBLISHING = True
 
-    return casualty, published
+    return casualty, published, len(post_images_paths)
 
 
 def publish_casualties_posts(
@@ -121,8 +139,9 @@ def publish_casualties_posts(
     intagram_password: str,
     posts_limit: int,
     min_images: int,
-    test: bool,
     names: List[str],
+    test: bool = False,
+    dry_run: bool = False,
 ) -> List[dict]:
     """Publish posts about all the casualties, one per each"""
     signal.signal(signal.SIGINT, signal_handler)
@@ -130,7 +149,7 @@ def publish_casualties_posts(
     updated_casualties_data = []
     instagram_client = InstagramClient(instagram_user, intagram_password)
     posts = 0
-    images_per_posts = defaultdict(lambda: 0)
+    images_per_posts = defaultdict(lambda: [])
 
     for casualty_data in given_casualties_data:
         casualty: Casualty = Casualty.from_dict(casualty_data)
@@ -159,25 +178,25 @@ def publish_casualties_posts(
                     f"\nNot enough images - the post about {casualty} won't be published."
                 )
             else:
-                casualty, published = _publish_casualty_post(
+                casualty, published, num_of_images = _publish_casualty_post(
                     casualty,
                     instagram_client=instagram_client,
                     test=test,
+                    dry_run=dry_run,
                 )
                 if published:
                     posts += 1
-                    images_per_posts[
-                        len(casualty.post_additional_images)
-                        if casualty.post_additional_images
-                        else 0
-                    ] += 1
+                    images_per_posts[num_of_images].append(casualty)
 
         updated_casualties_data.append(casualty.to_dict())
 
-    print(f"\n{posts} posts were published. Number of images in each posts:")
+    print(
+        f"\n{posts} posts were {'prepared' if dry_run else 'published'}. Number of images in each posts:"
+    )
     print(
         "\n".join(
-            f"{images}: {posts} posts" for images, posts in images_per_posts.items()
+            f"{images}: {len(posts)} posts ({[casualty.full_name for casualty in posts] if 1 < images else ''})"
+            for images, posts in images_per_posts.items()
         )
     )
 

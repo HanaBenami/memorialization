@@ -71,6 +71,11 @@ def parse_args() -> argparse.Namespace:
         "--publish", action="store_true", help="Publish the pre-saved posts"
     )
     parser.add_argument(
+        "--dry_run",
+        action="store_true",
+        help="Don't publish the post, just make it ready for publishment",
+    )
+    parser.add_argument(
         "--test",
         action="store_true",
         help="Don't mark post as published, only as tested",
@@ -136,7 +141,8 @@ if __name__ == "__main__":
             instagram_password,
             args.posts_limit,
             args.min_images,
-            args.test,
             args.names,
+            args.test,
+            args.dry_run,
         )
         write_data(casualties_data, JSON_FILE)

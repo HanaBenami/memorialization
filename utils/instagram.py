@@ -1,5 +1,4 @@
 from datetime import datetime
-from enum import unique
 import time
 import os
 import random
@@ -8,15 +7,13 @@ import instagrapi.types
 import instagrapi.exceptions
 import instaloader
 import instaloader.structures
-import cv2
-import cv2.typing
 from pathlib import Path
-from typing import List, Sequence, Tuple
+from typing import List, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
-import numpy
 from singleton_decorator import singleton
-from PIL import Image, ImageChops
+from PIL import Image
+from utils.images import detect_faces, is_duplication, square_crop_coordinations
 
 from utils.paths import is_image_file
 
@@ -159,54 +156,8 @@ class InstagramClient:
     def _session_file_name(self) -> str:
         return f"instagram_session_{self.instagram_user}.json"
 
-    @staticmethod
-    def _detect_faces(image_path: str) -> Sequence[cv2.typing.Rect]:
-        """Trying to detec faces in the image"""
-        faces = []
-        for xml in [
-            "opencv_frontalface_detection",
-            "haarcascade_profileface_detection",
-            "haarcascade_mcs_eyepair_big",
-            "haarcascade_mcs_nose",
-            "haarcascade_mcs_mouth",
-        ]:
-            face_cascade = cv2.CascadeClassifier(f"utils/face_detection/{xml}.xml")
-            faces = face_cascade.detectMultiScale(cv2.imread(image_path), 1.1, 4)
-            if len(faces) == 1:
-                break
-        return faces
-
-    @staticmethod
-    def _square_crop_coordinations(
-        img: Image, face: cv2.typing.Rect, new_size: int
-    ) -> cv2.typing.Rect:
-        face_left, face_top, face_width, face_hieght = face
-        face_center_x, face_center_y = (
-            face_left + face_width / 2,
-            face_top + face_hieght / 2,
-        )
-        left, top, right, bottom = (
-            face_center_x - new_size / 2,
-            face_center_y - new_size / 2,
-            face_center_x + new_size / 2,
-            face_center_y + new_size / 2,
-        )
-        if left < 0:
-            right -= left
-            left = 0
-        if img.width < right:
-            left -= right - img.width
-            right = img.width
-        if top < 0:
-            bottom -= top
-            top = 0
-        if img.width < right:
-            top -= bottom - img.width
-            bottom = img.width
-        return (left, top, right, bottom)
-
     @classmethod
-    def prepare_image_for_instagram(cls, path: str) -> str:
+    def _prepare_image_for_instagram(cls, path: str) -> str:
         """Modify the image to make it ready for Instagram standard"""
         img = Image.open(path)
         # RGB
@@ -216,9 +167,9 @@ class InstagramClient:
         if img.height != img.width:
             new_size = min(img.height, img.width)
             # Face recognition in order to center the image around the face
-            faces = cls._detect_faces(path)
+            faces = detect_faces(path)
             if len(faces) == 1:
-                left, top, right, bottom = cls._square_crop_coordinations(
+                left, top, right, bottom = square_crop_coordinations(
                     img, faces[0], new_size
                 )
             else:
@@ -230,43 +181,13 @@ class InstagramClient:
         img.save(new_path)
         return new_path
 
-    @classmethod
-    def avoid_duplicates_images(
-        cls, images_paths: List[str]
-    ) -> Tuple[List[str], List[str]]:
-        """
-        Check for similarity among the images and return list of unique images only.
-        Return values:
-        - List of unique images
-        - List of removed images
-        """
-        # TODO: It doesn't really work
-        # if not images_paths:
-        #     return [], []
-        # unique_images, removed = [images_paths[0]], []
-        # for i, current_image_path in enumerate(images_paths[1:]):
-        #     current_image = Image.open(current_image_path)
-        #     similar = False
-        #     for previous_image_path in images_paths[: i + 1]:
-        #         previous_image = Image.open(previous_image_path)
-        #         similarity = ImageChops.difference(
-        #             current_image, previous_image
-        #         ).getbbox()
-        #         if similarity:
-        #             similar = True
-        #     if not similar:
-        #         unique_images.append(current_image_path)
-        #     else:
-        #         removed.append(current_image_path)
-        # return unique_images, removed
-        return images_paths, []
-
     def publish_post(
         self,
         post_cation: str,
         post_main_image_path: str,
         post_additional_images_paths: List[str],
-    ) -> instagrapi.types.Media | None:
+        dry_run: bool = False,
+    ) -> instagrapi.types.Media | bool | None:
         """Publish an Instagram post"""
         post_caption_first_row = post_cation.split("\n")[0]
         print(
@@ -277,26 +198,26 @@ class InstagramClient:
             {post_additional_images_paths}
             """
         )
-        post_images_paths_with_duplications = [
-            self.prepare_image_for_instagram(path)
+        post_images_paths = [post_main_image_path]
+        post_additional_images_paths = [
+            self._prepare_image_for_instagram(path)
             for path in post_additional_images_paths
         ]
-        post_images_paths_without_duplications, removed = self.avoid_duplicates_images(
-            post_images_paths_with_duplications
-        )
-        if removed:
-            print(f"{len(removed)} duplicates images were removed")
-        post_images_paths = [post_main_image_path]
-        post_images_paths.extend(post_images_paths_without_duplications)
-        _random_sleep(2)
-        self._init_instagram_session()
-        published = (
-            self.instagram_client.album_upload(post_images_paths, caption=post_cation)
-            if 1 < len(post_images_paths)
-            else self.instagram_client.photo_upload(
-                post_images_paths[0], caption=post_cation
+        post_images_paths.extend(post_additional_images_paths)
+        if dry_run:
+            published = True
+        else:
+            _random_sleep(2)
+            self._init_instagram_session()
+            published = (
+                self.instagram_client.album_upload(
+                    post_images_paths, caption=post_cation
+                )
+                if 1 < len(post_images_paths)
+                else self.instagram_client.photo_upload(
+                    post_images_paths[0], caption=post_cation
+                )
             )
-        )
-        for path in post_images_paths_with_duplications:
+        for path in post_additional_images_paths:
             os.remove(path)
         return published
