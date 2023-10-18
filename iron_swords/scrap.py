@@ -211,10 +211,23 @@ def collect_casualties_data(
             try:
                 casualty = collect_casualty(url)
                 if casualty.full_name in exist_names:
-                    if exist_names[casualty.full_name].post_published:
-                        casualty = exist_names[casualty.full_name]
-                    if exist_names[casualty.full_name] in casualties:
-                        casualties.remove(exist_names[casualty.full_name])
+                    exist_casualty = exist_names[casualty.full_name]
+                    if exist_casualty.post_published:
+                        exist_casualty = exist_names[casualty.full_name]
+                        print(
+                            f""""
+                            Warning! The post about {casualty} was already published, but the URL was changes:
+                            {exist_casualty.data_url}
+                             -> {casualty.data_url}
+                        """
+                        )
+                        exist_casualty.data_url = (
+                            casualty.data_url
+                        )  # In order to identify it next time
+                        casualty = exist_casualty
+
+                    if exist_casualty in casualties:
+                        casualties.remove(exist_casualty)
                 casualties.append(casualty)
                 new_urls_counter += 1
                 print(f"Data was collected from {new_urls_counter} URLs")

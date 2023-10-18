@@ -11,7 +11,7 @@ import instaloader.structures
 import cv2
 import cv2.typing
 from pathlib import Path
-from typing import List, Sequence
+from typing import List, Sequence, Tuple
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 import numpy
@@ -152,7 +152,7 @@ class InstagramClient:
         try:
             self.instagram_client.get_timeline_feed()
             return True
-        except instagrapi.exceptions.LoginRequired:
+        except Exception:
             return False
 
     @property
@@ -231,44 +231,61 @@ class InstagramClient:
         return new_path
 
     @classmethod
-    def avoid_duplicates_images(cls, post_images_paths: List[str]) -> List[str]:
-        """Check for similarity among the images and return list of unique images only"""
-        if not post_images_paths:
-            return
-        unique_images, removed = [post_images_paths[0]], []
-        for i, current_image_path in enumerate(post_images_paths[1:]):
-            current_image = Image.open(current_image_path)
-            similar = False
-            for previous_image_path in post_images_paths[:i]:
-                previous_image = Image.open(previous_image_path)
-                similarity = ImageChops.difference(
-                    current_image, previous_image
-                ).getbbox()
-                if similarity:
-                    similar = True
-            if not similar:
-                unique_images.append(current_image_path)
-            else:
-                removed.append(current_image_path)
-        return unique_images
+    def avoid_duplicates_images(
+        cls, images_paths: List[str]
+    ) -> Tuple[List[str], List[str]]:
+        """
+        Check for similarity among the images and return list of unique images only.
+        Return values:
+        - List of unique images
+        - List of removed images
+        """
+        # TODO: It doesn't really work
+        # if not images_paths:
+        #     return [], []
+        # unique_images, removed = [images_paths[0]], []
+        # for i, current_image_path in enumerate(images_paths[1:]):
+        #     current_image = Image.open(current_image_path)
+        #     similar = False
+        #     for previous_image_path in images_paths[: i + 1]:
+        #         previous_image = Image.open(previous_image_path)
+        #         similarity = ImageChops.difference(
+        #             current_image, previous_image
+        #         ).getbbox()
+        #         if similarity:
+        #             similar = True
+        #     if not similar:
+        #         unique_images.append(current_image_path)
+        #     else:
+        #         removed.append(current_image_path)
+        # return unique_images, removed
+        return images_paths, []
 
     def publish_post(
         self,
         post_cation: str,
         post_main_image_path: str,
         post_additional_images_paths: List[str],
-    ) -> instagrapi.types.Media:
+    ) -> instagrapi.types.Media | None:
         """Publish an Instagram post"""
+        post_caption_first_row = post_cation.split("\n")[0]
         print(
-            f"\nGoing to publish a post:\n{post_cation}\n{post_main_image_path}\n{post_additional_images_paths}"
+            f"""
+            Going to publish a post:
+            {post_caption_first_row}
+            {post_main_image_path}
+            {post_additional_images_paths}
+            """
         )
         post_images_paths_with_duplications = [
             self.prepare_image_for_instagram(path)
             for path in post_additional_images_paths
         ]
-        post_images_paths_without_duplications = self.avoid_duplicates_images(
+        post_images_paths_without_duplications, removed = self.avoid_duplicates_images(
             post_images_paths_with_duplications
         )
+        if removed:
+            print(f"{len(removed)} duplicates images were removed")
         post_images_paths = [post_main_image_path]
         post_images_paths.extend(post_images_paths_without_duplications)
         _random_sleep(2)
@@ -280,6 +297,6 @@ class InstagramClient:
                 post_images_paths[0], caption=post_cation
             )
         )
-        for path in post_images_paths:
+        for path in post_images_paths_with_duplications:
             os.remove(path)
         return published
