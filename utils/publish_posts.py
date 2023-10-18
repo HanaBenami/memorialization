@@ -4,6 +4,8 @@ from collections import defaultdict
 from typing import List
 from functools import reduce
 
+from instagrapi.utils import string
+
 from utils.casualty import Casualty, Gender
 from utils.instagram import InstagramClient
 from utils.paths import *
@@ -71,7 +73,7 @@ def _prepare_post_hashtags(casualty: Casualty) -> str:
 
 
 def _publish_casualty_post(
-    casualty: Casualty, instagram_client: InstagramClient, save_publish_date: bool
+    casualty: Casualty, instagram_client: InstagramClient, test: bool
 ) -> Casualty:
     """Publish a post about the casualty"""
     global STOP_PUBLISHING
@@ -82,19 +84,15 @@ def _publish_casualty_post(
                 post_hashtags = _prepare_post_hashtags(casualty)
                 post_cation = f"{post_text}\n{post_hashtags}"
                 casualty.post_caption = post_cation
-
-                post_images_paths = [
-                    casualty.post_path,
-                ]
-                post_images_paths.extend(casualty.post_images[1:])
-
-                instagram_client.publish_post(post_cation, post_images_paths)
-                print(f"The post about {casualty} was published successfully.")
-                casualty.post_published = (
-                    datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    if save_publish_date
-                    else True
+                instagram_client.publish_post(
+                    post_cation, casualty.post_path, casualty.post_additional_images
                 )
+                print(f"The post about {casualty} was published successfully.")
+                timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                if test:
+                    casualty.post_tested = timestamp
+                else:
+                    casualty.post_published = timestamp
 
             else:
                 print(f"No post to publish for {casualty}")
@@ -112,7 +110,8 @@ def publish_casualties_posts(
     intagram_password: str,
     posts_limit: int,
     min_images: int,
-    save_publish_date: bool,
+    test: bool,
+    names: List[str],
 ) -> List[dict]:
     """Publish posts about all the casualties, one per each"""
 
@@ -123,11 +122,19 @@ def publish_casualties_posts(
 
     for casualty_data in given_casualties_data:
         casualty: Casualty = Casualty.from_dict(casualty_data)
-        if not casualty.post_published and (posts_limit is None or posts < posts_limit):
-            casualty.post_images = [
-                path for path in casualty.post_images if os.path.isfile(path)
+        if (
+            (
+                (test and not casualty.post_tested)
+                or (not test and casualty.post_tested and not casualty.post_published)
+                or names
+            )
+            and (not names or any([name in casualty.full_name for name in names]))
+            and (posts_limit is None or posts < posts_limit)
+        ):
+            casualty.post_additional_images = [
+                path for path in casualty.post_additional_images if os.path.isfile(path)
             ]
-            if min_images and len(casualty.post_images) < min_images:
+            if min_images and len(casualty.post_additional_images) < min_images:
                 print(
                     f"\nNot enough images - the post about {casualty} won't be published."
                 )
@@ -135,11 +142,11 @@ def publish_casualties_posts(
                 casualty = _publish_casualty_post(
                     casualty,
                     instagram_client=instagram_client,
-                    save_publish_date=save_publish_date,
+                    test=test,
                 )
                 if casualty.post_published:
                     posts += 1
-                    images_per_posts[len(casualty.post_images)] += 1
+                    images_per_posts[len(casualty.post_additional_images)] += 1
 
         updated_casualties_data.append(casualty.to_dict())
 

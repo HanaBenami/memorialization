@@ -112,7 +112,7 @@ def collect_casualty(url: str) -> Casualty:
             else None
         )
 
-        post_images = []
+        post_main_image, post_additional_images = None, []
         small_img = driver.find_element(By.CLASS_NAME, "soldier-image").find_element(
             By.CLASS_NAME, "img-fluid"
         )
@@ -124,12 +124,12 @@ def collect_casualty(url: str) -> Casualty:
         if img_url and not "candle" in img_url:
             Path(IMAGES_DIR).mkdir(parents=True, exist_ok=True)
             small_img_path = os.path.join(
-                os.getcwd(), IMAGES_DIR, f"{full_name}_small.png"
+                os.getcwd(), IMAGES_DIR, f"{full_name}__small.png"
             )
             big_img_path = os.path.join(os.getcwd(), IMAGES_DIR, f"{full_name}_big.png")
 
             small_img.screenshot(small_img_path)
-            post_images.append(small_img_path)
+            post_main_image = small_img_path
 
             img_url = img_url[: img_url.rindex("?")]
             driver.get(img_url)
@@ -138,7 +138,7 @@ def collect_casualty(url: str) -> Casualty:
             )
             big_img = driver.find_element(By.TAG_NAME, "img")
             big_img.screenshot(big_img_path)
-            post_images.append(big_img_path)
+            post_additional_images = [big_img_path]
 
         casualty = Casualty(
             data_url=url,
@@ -150,7 +150,8 @@ def collect_casualty(url: str) -> Casualty:
             age=age,
             gender=gender,
             date_of_death_str=date_of_death_str,
-            post_images=post_images,
+            post_main_image=post_main_image,
+            post_additional_images=post_additional_images,
         )
 
     return casualty
@@ -160,7 +161,7 @@ def add_casualty_images_from_external_resources(
     casualty: Casualty, instagram_user: str, intagram_password: str, redownload: bool
 ) -> None:
     """Look for the casualty name in other posts. If exists, add images from these posts."""
-    casualty.post_images.extend(
+    casualty.post_additional_images.extend(
         find_images_in_external_posts(
             full_name=casualty.full_name,
             instagram_accounts=["remember_haravot_barzel"],
@@ -169,14 +170,14 @@ def add_casualty_images_from_external_resources(
             redownload=redownload,
         )
     )
-    casualty.post_images.extend(
+    casualty.post_additional_images.extend(
         find_images_in_external_images_pool(full_name=casualty.full_name)
     )
-    casualty.post_images = list(set(casualty.post_images))
-    casualty.post_images = [
-        path for path in casualty.post_images if os.path.isfile(path)
+    casualty.post_additional_images = list(set(casualty.post_additional_images))
+    casualty.post_additional_images = [
+        path for path in casualty.post_additional_images if os.path.isfile(path)
     ]
-    casualty.post_images.sort(key=lambda path: IMAGES_DIR not in path)
+    casualty.post_additional_images.sort(key=lambda path: IMAGES_DIR not in path)
 
 
 def collect_casualties_data(
@@ -193,8 +194,12 @@ def collect_casualties_data(
     if recollect:
         casualties = [casualty for casualty in casualties if casualty.post_published]
 
-    exist_urls = {casualty.data_url: casualty for casualty in casualties}
+    exist_urls = {
+        casualty.data_url.replace("https://", ""): casualty for casualty in casualties
+    }
+    exist_names = {casualty.full_name: casualty for casualty in casualties}
     new_urls_counter = 0
+    errors_urls_counter = 0
 
     urls = collect_casualties_urls(
         "https://www.idf.il/%D7%A0%D7%95%D7%A4%D7%9C%D7%99%D7%9D/%D7%97%D7%9C%D7%9C%D7%99-%D7%97%D7%A8%D7%91%D7%95%D7%AA-%D7%91%D7%A8%D7%96%D7%9C/",
@@ -202,11 +207,23 @@ def collect_casualties_data(
     )
 
     for url in urls:
-        if url not in exist_urls:
-            casualties.append(collect_casualty(url))
-            new_urls_counter += 1
-
-    print(f"\nData was collected from {new_urls_counter} URLs")
+        if url.replace("https://", "") not in exist_urls:
+            try:
+                casualty = collect_casualty(url)
+                if casualty.full_name in exist_names:
+                    if exist_names[casualty.full_name].post_published:
+                        casualty = exist_names[casualty.full_name]
+                    if exist_names[casualty.full_name] in casualties:
+                        casualties.remove(exist_names[casualty.full_name])
+                casualties.append(casualty)
+                new_urls_counter += 1
+                print(f"Data was collected from {new_urls_counter} URLs")
+            except Exception as e:
+                errors_urls_counter += 1
+                print(f"\nErro while collection data from {url}:\n{e}\n")
+    print(f"{len(urls) - new_urls_counter} URLs were already exists")
+    if errors_urls_counter:
+        print(f"An error occured with {errors_urls_counter} others URLs")
 
     print("\nLooking for additional images in external resources...")
     redownload = True
@@ -219,6 +236,9 @@ def collect_casualties_data(
                 redownload=redownload,
             )
             redownload = False
+            if not casualty.post_main_image and casualty.post_additional_images:
+                casualty.post_main_image = casualty.post_additional_images[0]
+                casualty.post_additional_images = casualty.post_additional_images[1:]
 
     print("\nDone!")
     return [casualty.to_dict() for casualty in casualties]

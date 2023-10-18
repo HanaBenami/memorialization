@@ -27,9 +27,11 @@ class Casualty:
     age: int | None
     gender: Gender | None
     date_of_death_str: str | None  # Required format: %Y-%m-%d
-    post_images: List[str]
+    post_main_image: str | None
+    post_additional_images: List[str]
     post_path: str | None = None
     post_caption: str | None = None
+    post_tested: bool | str = False
     post_published: bool | str = False
 
     def __str__(self) -> str:

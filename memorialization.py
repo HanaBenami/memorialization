@@ -1,6 +1,7 @@
 import argparse
 import getpass
 import importlib
+from typing import Any, Optional, Sequence, Text, Union
 
 from utils.json_storage import reload_data, write_data
 from utils.build_posts import create_casualties_posts
@@ -8,12 +9,22 @@ from utils.publish_posts import publish_casualties_posts
 
 
 class Password(argparse.Action):
-    def __call__(self, parser, namespace, values, option_string):
+    """Password argument handler, for making the password typing hidden and safe"""
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: Union[Text, Sequence[Any], None],
+        option_string: Optional[Text] = None,
+    ) -> None:
         values = getpass.getpass()
         setattr(namespace, self.dest, values)
 
 
-def args_parser() -> argparse.ArgumentParser:
+def parse_args() -> argparse.Namespace:
+    """Arguments handler"""
+
     parser = argparse.ArgumentParser(
         prog="Insta Memorialization",
         description="Tool for publishing personal posts describing the war casualties",
@@ -53,16 +64,16 @@ def args_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Collect data about the casualties from the web, even if it was already collected, unless if it was already published",
     )
-    parser.add_argument(
+    build_arg = parser.add_argument(
         "--build", action="store_true", help="Create and save the posts"
     )
     parser.add_argument(
         "--publish", action="store_true", help="Publish the pre-saved posts"
     )
     parser.add_argument(
-        "--dont_save_publish_date",
+        "--test",
         action="store_true",
-        help='Publish date won\'t be saved ("True" will be saved instead)',
+        help="Don't mark post as published, only as tested",
     )
     parser.add_argument(
         "--pages_limit",
@@ -79,11 +90,20 @@ def args_parser() -> argparse.ArgumentParser:
         type=int,
         help="Minimal number of images in a published post. A post with less images won't be published.",
     )
-    return parser
+    parser.add_argument(
+        "--names", nargs="+", help="Publish posts only for these names", default=[]
+    )
+    args = parser.parse_args()
+    if args.collect and args.publish and not args.build:
+        raise argparse.ArgumentError(
+            argument=build_arg,
+            message='You cannot use "collect" and "publish" without "build"',
+        )
+    return args
 
 
 if __name__ == "__main__":
-    args = args_parser().parse_args()
+    args = parse_args()
 
     collect_casualties_data = importlib.import_module(
         args.scrap_function_package
@@ -116,6 +136,7 @@ if __name__ == "__main__":
             instagram_password,
             args.posts_limit,
             args.min_images,
-            not args.dont_save_publish_date,
+            args.test,
+            args.names,
         )
         write_data(casualties_data, JSON_FILE)
