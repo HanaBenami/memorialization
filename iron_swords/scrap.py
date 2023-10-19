@@ -112,6 +112,9 @@ def collect_casualty(url: str) -> Casualty:
             else None
         )
 
+        living_city = re_search("(?:, מ)(.*?)(?:,)", section)
+        grave_city = re_search("(בית העלמין.*?)(?:\\.)", section)
+
         post_main_image, post_additional_images = None, []
         small_img = driver.find_element(By.CLASS_NAME, "soldier-image").find_element(
             By.CLASS_NAME, "img-fluid"
@@ -124,9 +127,11 @@ def collect_casualty(url: str) -> Casualty:
         if img_url and not "candle" in img_url:
             Path(IMAGES_DIR).mkdir(parents=True, exist_ok=True)
             small_img_path = os.path.join(
-                os.getcwd(), IMAGES_DIR, f"{full_name}__small.png"
+                os.getcwd(), IMAGES_DIR, f"{full_name}_{age}_{living_city}_small.png"
             )
-            big_img_path = os.path.join(os.getcwd(), IMAGES_DIR, f"{full_name}_big.png")
+            big_img_path = os.path.join(
+                os.getcwd(), IMAGES_DIR, f"{full_name}_{age}_{living_city}_big.png"
+            )
 
             small_img.screenshot(small_img_path)
             post_main_image = small_img_path
@@ -145,8 +150,8 @@ def collect_casualty(url: str) -> Casualty:
             full_name=full_name,
             degree=degree,
             department=section.split("\n")[1],
-            living_city=re_search("(?:, מ)(.*?)(?:,)", section),
-            grave_city=re_search("(בית העלמין.*?)(?:\\.)", section),
+            living_city=living_city,
+            grave_city=grave_city,
             age=age,
             gender=gender,
             date_of_death_str=date_of_death_str,
@@ -212,22 +217,26 @@ def collect_casualties_data(
                 casualty = collect_casualty(url)
                 if casualty.full_name in exist_names:
                     exist_casualty = exist_names[casualty.full_name]
-                    if exist_casualty.post_published:
-                        exist_casualty = exist_names[casualty.full_name]
-                        print(
-                            f""""
-                            Warning! The post about {casualty} was already published, but the URL was changes:
-                            {exist_casualty.data_url}
-                             -> {casualty.data_url}
-                        """
-                        )
-                        exist_casualty.data_url = (
-                            casualty.data_url
-                        )  # In order to identify it next time
-                        casualty = exist_casualty
+                    if (
+                        exist_casualty.age == casualty.age
+                        and exist_casualty.living_city == casualty.living_city
+                    ):
+                        if exist_casualty.post_published:
+                            exist_casualty = exist_names[casualty.full_name]
+                            print(
+                                f""""
+                                Warning! The post about {casualty} was already published, but the URL was changes:
+                                {exist_casualty.data_url}
+                                -> {casualty.data_url}
+                            """
+                            )
+                            exist_casualty.data_url = (
+                                casualty.data_url
+                            )  # In order to identify it next time
+                            casualty = exist_casualty
 
-                    if exist_casualty in casualties:
-                        casualties.remove(exist_casualty)
+                        if exist_casualty in casualties:
+                            casualties.remove(exist_casualty)
                 casualties.append(casualty)
                 new_urls_counter += 1
                 print(f"Data was collected from {new_urls_counter} URLs")

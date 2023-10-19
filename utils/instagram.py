@@ -34,9 +34,9 @@ class PostContent:
         return datetime.strptime(self.date_str, self.DATETIME_FORMAT)
 
 
-def _random_sleep(max_minutes: float):
-    """Random sleep for up to <max_minutes> minutes"""
-    sleep_seconds = random.randint(0, round(max_minutes * 60))
+def _random_sleep(min_minutes: float, max_minutes: float):
+    """Random sleep for <min_minutes> and up to <max_minutes> minutes"""
+    sleep_seconds = random.randint(round(min_minutes * 60), round(max_minutes * 60))
     print(f"Going to sleep for {sleep_seconds} seconds before publishing...")
     time.sleep(sleep_seconds)
 
@@ -83,7 +83,7 @@ class InstagramScraper:
                 timestamp = post.date.strftime(PostContent.DATETIME_FORMAT)
                 target_sub_dir = f"{account}_{timestamp}"
                 downloaded_posts.append(self._download_post(post, target_sub_dir))
-                _random_sleep(0.1)
+                _random_sleep(0, 0.1)
         os.chdir(wd)
         return downloaded_posts
 
@@ -207,7 +207,7 @@ class InstagramClient:
         if dry_run:
             published = True
         else:
-            _random_sleep(2)
+            _random_sleep(1, 3)
             self._init_instagram_session()
             published = (
                 self.instagram_client.album_upload(
