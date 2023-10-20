@@ -30,6 +30,15 @@ def detect_faces(image_path: str) -> Sequence[cv2.typing.Rect]:
     return faces
 
 
+def convert_to_rgb(img: Image) -> Image:
+    """
+    Convert the image to RGB mode
+    """
+    if img.mode in ["RGBA", "P"]:
+        img = img.convert("RGB")
+    return img
+
+
 def cut_face(image_path: str, margin: float = 0.1) -> Image:
     """
     Return an image with only the first detected face.
@@ -37,8 +46,7 @@ def cut_face(image_path: str, margin: float = 0.1) -> Image:
     faces = detect_faces(image_path)
     if 0 < len(faces):
         img = Image.open(image_path)
-        if img.mode == "RGBA":
-            img = img.convert("RGB")
+        img = convert_to_rgb(img)
         face_left, face_top, face_width, face_hieght = faces[0]
         margin_x, margin_y = face_width * margin, face_hieght * margin
         face_left, face_top, face_right, face_botton = (

@@ -8,13 +8,13 @@ import instagrapi.exceptions
 import instaloader
 import instaloader.structures
 from pathlib import Path
-from typing import List, Tuple
+from typing import List
 from dataclasses import dataclass
 from dataclasses_json import dataclass_json
 from singleton_decorator import singleton
 from PIL import Image
-from utils.images import detect_faces, is_duplication, square_crop_coordinations
 
+from utils.images import convert_to_rgb, detect_faces, square_crop_coordinations
 from utils.paths import is_image_file
 
 
@@ -161,8 +161,7 @@ class InstagramClient:
         """Modify the image to make it ready for Instagram standard"""
         img = Image.open(path)
         # RGB
-        if img.mode == "RGBA":
-            img = img.convert("RGB")
+        img = convert_to_rgb(img)
         # Aspect ratio
         if img.height != img.width:
             new_size = min(img.height, img.width)
