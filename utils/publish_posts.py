@@ -14,6 +14,7 @@ from utils.instagram import InstagramClient
 
 
 STOP_PUBLISHING = False
+BAD_ATTEMPTS = 0
 
 
 def signal_handler(_sig, _frame):
@@ -98,6 +99,7 @@ def _publish_casualty_post(
 ) -> Tuple[Casualty, instagrapi.types.Media | bool | None, int]:
     """Publish a post about the casualty"""
     global STOP_PUBLISHING
+    global BAD_ATTEMPTS
     published, post_images_paths = None, []
     try:
         if not STOP_PUBLISHING:
@@ -128,7 +130,10 @@ def _publish_casualty_post(
         print(
             f"Couldn't publish the post for {casualty}:\n{e}\n\nGoing to stop publishing posts..."
         )
-        STOP_PUBLISHING = True
+        if 2 < BAD_ATTEMPTS:
+            STOP_PUBLISHING = True
+        else:
+            BAD_ATTEMPTS += 1
 
     return casualty, published, len(post_images_paths)
 
